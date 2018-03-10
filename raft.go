@@ -274,12 +274,19 @@ func main() {
 		timeout, _ = strconv.Atoi(raftTimeout)
 	}
 
-	// Getting targetSync from env
-	targetSyncInt := 0
-	if raftTargetSync := os.Getenv("RAFT_TARGET_SYNC"); raftTargetSync != "" {
-		targetSyncInt, _ = strconv.Atoi(raftTargetSync)
+	// Getting targetSync from confFile
+	targetSync := float64(0)
+	if _, err := os.Stat("/app/conf.yml"); err == nil {
+		var c treesiplibs.Conf
+		c.GetConf( "/app/conf.yml" )
+		targetSync = c.TargetSync
+	} else {
+		if raftTargetSync := os.Getenv("RAFT_TARGET_SYNC"); raftTargetSync != "" {
+			targetSyncInt, _ := strconv.Atoi(raftTargetSync)
+			targetSync = float64(targetSyncInt)
+		}
 	}
-	targetSync := float64(targetSyncInt)
+
 
 
 	// Logger configuration
@@ -309,7 +316,7 @@ func main() {
 	log.Info("FLAGS : PortInt is " + strconv.Itoa(PortInt))
 	log.Info("FLAGS : Port is " + Port)
 	log.Info("FLAGS : Timeout is " + strconv.Itoa(timeout))
-	log.Info("FLAGS : TargetSync is " + strconv.Itoa(targetSyncInt))
+	log.Info("FLAGS : TargetSync is " + strconv.Itoa(int(targetSync)))
 	log.Info("")
 	for _, element := range os.Args {
 		log.Info("FLAG : " + element)
