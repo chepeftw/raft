@@ -96,10 +96,7 @@ func startTimerStar(localTimeout float32, timeoutType int) {
 	go func() {
 		<-timer.C
 
-		payload := Packet{
-			Source: "0.0.0.0",
-			Type:   timeoutType,
-		}
+		payload := Packet{ Source: "0.0.0.0", Type: timeoutType }
 
 		js, err := json.Marshal(payload)
 		treesiplibs.CheckError(err, log)
@@ -186,19 +183,6 @@ func eqIp(a net.IP, b net.IP) bool {
 	return treesiplibs.CompareIPs(a, b)
 }
 
-func getCurrentState() string {
-	switch state {
-	case FOLLOWER:
-		return "Follower"
-	case CANDIDATE:
-		return "Candidate"
-	case LEADER:
-		return "Leader"
-	default:
-		return "Error"
-	}
-}
-
 func applyVote(ip string) {
 	if _, ok := votes[ip]; !ok {
 		votes[ip] = 0
@@ -250,18 +234,14 @@ func attendBufferChannel() {
 						sendRequestVote()
 						log.Debug(myIP.String() + " => ASKING FOR VOTES!")
 						log.Debug(myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2))
-						log.Debug(myIP.String() + " => My current state is " + getCurrentState())
 						startTimerStar(float32(timeout/2), ENDELECTIONTYPE)
 					} else if payload.Type == REQUESTFORVOTETYPE && !eqIp(myIP, net.ParseIP(payload.Source)) {
 						state = FOLLOWER
-
 						sendVote(payload.Vote)
 						log.Debug(myIP.String() + " => Sending vote for " + payload.Vote)
-						log.Debug(myIP.String() + " => My current state is " + getCurrentState())
 						startTimer()
 					} else if payload.Type == VOTETYPE {
 						log.Debug(myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source)
-						log.Debug(myIP.String() + " => My current state is " + getCurrentState())
 						applyVote(payload.Vote)
 					} else if payload.Type == ENDELECTIONTYPE {
 						winner := "0.0.0.0"
