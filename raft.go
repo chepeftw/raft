@@ -21,15 +21,15 @@ var format = logging.MustStringFormatter(
 
 // +++++++++ Constants
 const (
-	DefPort           = 10001
-	DefTimeout        = 10000
-	Protocol          = "udp"
-	BroadcastAddr     = "255.255.255.255"
-	LocalhostAddr     = "127.0.0.1"
+	DefPort       = 10001
+	DefTimeout    = 10000
+	Protocol      = "udp"
+	BroadcastAddr = "255.255.255.255"
+	LocalhostAddr = "127.0.0.1"
 )
 
 const (
-	FOLLOWER = iota
+	FOLLOWER  = iota
 	CANDIDATE
 	LEADER
 )
@@ -66,23 +66,23 @@ var votes map[string]int
 var forwarded = make(map[string]bool)
 
 type Packet struct {
-	Source       string     `json:"src"`
-	Type         int        `json:"tpe"`
-	Action       int        `json:"act,omitempty"`
-	Vote 	 	 string		`json:"vot,omitempty"`
-	Message 	 string		`json:"msg,omitempty"`
-	Timestamp    int64	    `json:"tst"`
+	Source    string `json:"src"`
+	Type      int    `json:"tpe"`
+	Action    int    `json:"act,omitempty"`
+	Vote      string `json:"vot,omitempty"`
+	Message   string `json:"msg,omitempty"`
+	Timestamp int64  `json:"tst"`
 }
 
 func startTimer() {
-	startTimerStar( float32(timeout), TIMEOUTTYPE)
+	startTimerStar(float32(timeout), TIMEOUTTYPE)
 }
 
 func startTimerRand() {
 	s1 := rndm.Intn(2000000)
 	s2 := rndm.Intn(2000000)
 	s3 := rndm.Intn(1000000)
-	randomTimeout := float32((s1 + s2 + s3)/1000)
+	randomTimeout := float32((s1 + s2 + s3) / 1000)
 
 	startTimerStar(randomTimeout, TIMEOUTTYPE)
 }
@@ -92,11 +92,11 @@ func startTimerStar(localTimeout float32, timeoutType int) {
 	timer = treesiplibs.StartTimeoutF(localTimeout)
 
 	go func() {
-		<- timer.C
+		<-timer.C
 
 		payload := Packet{
 			Source: "0.0.0.0",
-			Type: timeoutType,
+			Type:   timeoutType,
 		}
 
 		js, err := json.Marshal(payload)
@@ -145,11 +145,17 @@ func sendMessage(payload Packet) {
 	js, err := json.Marshal(payload)
 	treesiplibs.CheckError(err, log)
 	output <- string(js)
+
+	forwarded[getMessageKey(payload)] = true
+}
+
+func getMessageKey(payload Packet) string {
+	return payload.Source + "_" + strconv.FormatInt(payload.Timestamp, 10)
 }
 
 // Function that handles the output channel
 func attendOutputChannel() {
-	ServerAddr,err := net.ResolveUDPAddr(Protocol, BroadcastAddr+Port)
+	ServerAddr, err := net.ResolveUDPAddr(Protocol, BroadcastAddr+Port)
 	treesiplibs.CheckError(err, log)
 	LocalAddr, err := net.ResolveUDPAddr(Protocol, myIP.String()+":0")
 	treesiplibs.CheckError(err, log)
@@ -162,7 +168,7 @@ func attendOutputChannel() {
 		if more {
 			if Conn != nil {
 				buf := []byte(j)
-				_,err = Conn.Write(buf)
+				_, err = Conn.Write(buf)
 				//log.Debug( myIP.String() + " " + j + " MESSAGE_SIZE=" + strconv.Itoa(len(buf)) )
 				//log.Info( myIP.String() + " SENDING_MESSAGE=1" )
 				treesiplibs.CheckError(err, log)
@@ -175,10 +181,9 @@ func attendOutputChannel() {
 	}
 }
 
-func eqIp( a net.IP, b net.IP ) bool {
+func eqIp(a net.IP, b net.IP) bool {
 	return treesiplibs.CompareIPs(a, b)
 }
-
 
 // Function that handles the buffer channel
 func attendBufferChannel() {
@@ -191,15 +196,11 @@ func attendBufferChannel() {
 			payload := Packet{}
 			json.Unmarshal([]byte(j), &payload)
 
-			if !eqIp( myIP, net.ParseIP(payload.Source) ) {
+			if _, ok := forwarded[ getMessageKey(payload) ]; !ok && !eqIp(myIP, net.ParseIP(payload.Source)) {
 				// Actually any message should be broadcasted
 				if !(payload.Type == TIMEOUTTYPE || payload.Type == ENDELECTIONTYPE) { // then broadcast
-					msgKey := payload.Source + "_" + strconv.FormatInt(payload.Timestamp, 10)
-					if _, ok := forwarded[ msgKey ]; !ok {
-						// Broadcast it
-						sendMessage(payload)
-						forwarded[msgKey] = true
-					}
+					// Broadcast it
+					sendMessage(payload)
 				}
 
 				//log.Debug( myIP.String() + " => message => " + j )
@@ -209,34 +210,34 @@ func attendBufferChannel() {
 				case FOLLOWER:
 					if payload.Type == TIMEOUTTYPE {
 						state = CANDIDATE
-						log.Debug( myIP.String() + " => Changing to CANDIDATE!" )
+						log.Debug(myIP.String() + " => Changing to CANDIDATE!")
 						startTimerRand()
 					} else if payload.Type == REQUESTFORVOTETYPE {
 						sendVote(payload.Vote)
-						log.Debug( myIP.String() + " => Sending vote for " + payload.Vote)
+						log.Debug(myIP.String() + " => Sending vote for " + payload.Vote)
 						startTimer()
 					} else if payload.Type == VOTETYPE {
 						votes[payload.Vote] += 1
 						startTimer()
 					} else if payload.Type == PINGTYPE {
 						startTimer()
-						log.Debug( myIP.String() + " => got ping from leader!" )
+						log.Debug(myIP.String() + " => got ping from leader!")
 					}
 					break
 				case CANDIDATE:
 					if payload.Type == TIMEOUTTYPE {
 						sendRequestVote()
-						log.Debug( myIP.String() + " => ASKING FOR VOTES!" )
-						log.Debug( myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2) )
+						log.Debug(myIP.String() + " => ASKING FOR VOTES!")
+						log.Debug(myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2))
 						startTimerStar(float32(timeout/2), ENDELECTIONTYPE)
-					} else if payload.Type == REQUESTFORVOTETYPE && !eqIp( myIP, net.ParseIP(payload.Source) ) {
+					} else if payload.Type == REQUESTFORVOTETYPE && !eqIp(myIP, net.ParseIP(payload.Source)) {
 						state = FOLLOWER
 
 						sendVote(payload.Vote)
-						log.Debug( myIP.String() + " => Sending vote for " + payload.Vote)
+						log.Debug(myIP.String() + " => Sending vote for " + payload.Vote)
 						startTimer()
 					} else if payload.Type == VOTETYPE {
-						log.Debug( myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source )
+						log.Debug(myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source)
 						votes[payload.Vote] += 1
 					} else if payload.Type == ENDELECTIONTYPE {
 						winner := "0.0.0.0"
@@ -248,11 +249,11 @@ func attendBufferChannel() {
 							}
 						}
 
-						log.Debug( myIP.String() + " => THE WINNER IS " + winner + " with " + strconv.Itoa(numberVotes) + " votes!" )
+						log.Debug(myIP.String() + " => THE WINNER IS " + winner + " with " + strconv.Itoa(numberVotes) + " votes!")
 
 						if winner == myIP.String() {
 							state = FOLLOWER
-							log.Debug( myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!" )
+							log.Debug(myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!")
 							startTimerStar(float32(timeout/2), TIMEOUTTYPE)
 						}
 					}
@@ -300,7 +301,7 @@ func main() {
 	targetSync := float64(0)
 	if _, err := os.Stat("/app/conf.yml"); err == nil {
 		var c treesiplibs.Conf
-		c.GetConf( "/app/conf.yml" )
+		c.GetConf("/app/conf.yml")
 		targetSync = c.TargetSync
 	} else {
 		if raftTargetSync := os.Getenv("RAFT_TARGET_SYNC"); raftTargetSync != "" {
@@ -309,8 +310,6 @@ func main() {
 		}
 	}
 
-
-
 	// Logger configuration
 	var logPath = "/var/log/golang/"
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
@@ -318,7 +317,7 @@ func main() {
 	}
 
 	var logFile = logPath + "raft" + strconv.Itoa(PortInt) + ".log"
-	f, err := os.OpenFile(logFile, os.O_APPEND | os.O_CREATE | os.O_RDWR, 0666)
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		fmt.Printf("error opening file: %v", err)
 	}
@@ -358,7 +357,7 @@ func main() {
 	sleepTime := 0
 	if targetSync > now {
 		sleepTime = int(targetSync - now)
-		log.Info("SYNC: Sync time is " + strconv.FormatFloat( targetSync, 'f', 6, 64) )
+		log.Info("SYNC: Sync time is " + strconv.FormatFloat(targetSync, 'f', 6, 64))
 	}
 
 	log.Info("SYNC: sleepTime is " + strconv.Itoa(sleepTime))
@@ -367,10 +366,10 @@ func main() {
 
 	// But first let me take a selfie, in a Go lang program is getting my own IP
 	myIP = treesiplibs.SelfieIP()
-	log.Info( "Good to go, my ip is " + myIP.String() + " and port is " + Port )
+	log.Info("Good to go, my ip is " + myIP.String() + " and port is " + Port)
 
 	// Lets prepare a address at any address at port Port
-	ServerAddr,err := net.ResolveUDPAddr(Protocol, Port)
+	ServerAddr, err := net.ResolveUDPAddr(Protocol, Port)
 	treesiplibs.CheckError(err, log)
 
 	// Now listen at selected port
@@ -388,7 +387,7 @@ func main() {
 	buf := make([]byte, 1024)
 
 	for {
-		n,_,err := ServerConn.ReadFromUDP(buf)
+		n, _, err := ServerConn.ReadFromUDP(buf)
 		str := string(buf[0:n])
 
 		buffer <- str
