@@ -95,6 +95,7 @@ func startTimerStar(localTimeout float32, timeoutType int) {
 		<- timer.C
 
 		payload := Packet{
+			Source: "0.0.0.0",
 			Type: timeoutType,
 		}
 
