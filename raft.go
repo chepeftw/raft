@@ -200,6 +200,13 @@ func getCurrentState() string {
 	}
 }
 
+func applyVote(ip string) {
+	if _, ok := votes[ip]; !ok {
+		votes[ip] = 0
+	}
+	votes[ip] += 1
+}
+
 // Function that handles the buffer channel
 func attendBufferChannel() {
 	for {
@@ -232,7 +239,7 @@ func attendBufferChannel() {
 						log.Debug(myIP.String() + " => Sending vote for " + payload.Vote)
 						startTimer()
 					} else if payload.Type == VOTETYPE {
-						votes[payload.Vote] += 1
+						applyVote(payload.Vote)
 						startTimer()
 					} else if payload.Type == PINGTYPE {
 						startTimer()
@@ -256,7 +263,7 @@ func attendBufferChannel() {
 					} else if payload.Type == VOTETYPE {
 						log.Debug(myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source)
 						log.Debug(myIP.String() + " => My current state is " + getCurrentState())
-						votes[payload.Vote] += 1
+						applyVote(payload.Vote)
 					} else if payload.Type == ENDELECTIONTYPE {
 						winner := "0.0.0.0"
 						numberVotes := 0
