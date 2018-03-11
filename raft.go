@@ -197,6 +197,9 @@ func attendBufferChannel() {
 				if _, ok := forwarded[ msgKey ]; !ok && !eqIp( myIP, net.ParseIP(payload.Source) ) {
 					// Broadcast it
 					sendMessage(payload)
+					forwarded[msgKey] = true
+				} else {
+					continue
 				}
 			}
 
