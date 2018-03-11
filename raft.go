@@ -225,7 +225,7 @@ func attendBufferChannel() {
 					log.Debug( myIP.String() + " => ASKING FOR VOTES!" )
 					log.Debug( myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2) )
 					startTimerStar(float32(timeout/2), ENDELECTIONTYPE)
-				} else if payload.Type == REQUESTFORVOTETYPE {
+				} else if payload.Type == REQUESTFORVOTETYPE && !eqIp( myIP, net.ParseIP(payload.Source) ) {
 					state = FOLLOWER
 					sendVote(payload.Vote)
 					log.Debug( myIP.String() + " => Sending vote for " + payload.Vote)
