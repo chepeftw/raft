@@ -161,8 +161,8 @@ func attendOutputChannel() {
 			if Conn != nil {
 				buf := []byte(j)
 				_,err = Conn.Write(buf)
-				log.Debug( myIP.String() + " " + j + " MESSAGE_SIZE=" + strconv.Itoa(len(buf)) )
-				log.Info( myIP.String() + " SENDING_MESSAGE=1" )
+				//log.Debug( myIP.String() + " " + j + " MESSAGE_SIZE=" + strconv.Itoa(len(buf)) )
+				//log.Info( myIP.String() + " SENDING_MESSAGE=1" )
 				treesiplibs.CheckError(err, log)
 			}
 		} else {
@@ -173,13 +173,17 @@ func attendOutputChannel() {
 	}
 }
 
+func eqIp( a net.IP, b net.IP ) bool {
+	return treesiplibs.CompareIPs(a, b)
+}
+
 
 // Function that handles the buffer channel
 func attendBufferChannel() {
 	for {
 		j, more := <-buffer
 		if more {
-			attendBufferChannelStartTime := time.Now().UnixNano() // Start time of the monitoring process
+			//attendBufferChannelStartTime := time.Now().UnixNano() // Start time of the monitoring process
 
 			// First we take the json, unmarshal it to an object
 			payload := Packet{}
@@ -190,7 +194,7 @@ func attendBufferChannel() {
 			// Actually any message should be broadcasted
 			if !(payload.Type == TIMEOUTTYPE || payload.Type == ENDELECTIONTYPE) { // then broadcast
 			msgKey := payload.Source + "_" + strconv.FormatInt(payload.Timestamp, 10)
-				if _, ok := forwarded[ msgKey ]; !ok {
+				if _, ok := forwarded[ msgKey ]; !ok && !eqIp( myIP, net.ParseIP(payload.Source) ) {
 					// Broadcast it
 					sendMessage(payload)
 				}
@@ -205,6 +209,7 @@ func attendBufferChannel() {
 					startTimerRand()
 				} else if payload.Type == REQUESTFORVOTETYPE {
 					sendVote(payload.Vote)
+					log.Debug( myIP.String() + " => Sending vote for " + payload.Vote)
 					startTimer()
 				} else if payload.Type == VOTETYPE {
 					votes[payload.Vote] += 1
@@ -218,10 +223,12 @@ func attendBufferChannel() {
 				if payload.Type == TIMEOUTTYPE {
 					sendRequestVote()
 					log.Debug( myIP.String() + " => ASKING FOR VOTES!" )
+					log.Debug( myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2) )
 					startTimerStar(float32(timeout/2), ENDELECTIONTYPE)
 				} else if payload.Type == REQUESTFORVOTETYPE {
 					state = FOLLOWER
 					sendVote(payload.Vote)
+					log.Debug( myIP.String() + " => Sending vote for " + payload.Vote)
 					startTimer()
 				} else if payload.Type == VOTETYPE {
 					log.Debug( myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source )
@@ -256,7 +263,7 @@ func attendBufferChannel() {
 				break
 			}
 
-			log.Debug("ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - attendBufferChannelStartTime) / int64(time.Nanosecond), 10 ))
+			//log.Debug("ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - attendBufferChannelStartTime) / int64(time.Nanosecond), 10 ))
 
 		} else {
 			log.Debug("closing channel")
