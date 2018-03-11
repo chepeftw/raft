@@ -118,6 +118,7 @@ func sendRequestVote() {
 }
 
 func sendVote(voteFor string) {
+	time.Sleep(time.Millisecond * time.Duration(rndm.Intn(1000)))
 	payload := Packet{
 		Source:    myIP.String(),
 		Type:      VOTETYPE,
@@ -189,83 +190,82 @@ func attendBufferChannel() {
 			payload := Packet{}
 			json.Unmarshal([]byte(j), &payload)
 
-			if eqIp( myIP, net.ParseIP(payload.Source) ) {
-				continue
-			}
-
-			// Actually any message should be broadcasted
-			if !(payload.Type == TIMEOUTTYPE || payload.Type == ENDELECTIONTYPE) { // then broadcast
-			msgKey := payload.Source + "_" + strconv.FormatInt(payload.Timestamp, 10)
-				if _, ok := forwarded[ msgKey ]; !ok {
-					// Broadcast it
-					sendMessage(payload)
-					forwarded[msgKey] = true
+			if !eqIp( myIP, net.ParseIP(payload.Source) ) {
+				// Actually any message should be broadcasted
+				if !(payload.Type == TIMEOUTTYPE || payload.Type == ENDELECTIONTYPE) { // then broadcast
+					msgKey := payload.Source + "_" + strconv.FormatInt(payload.Timestamp, 10)
+					if _, ok := forwarded[ msgKey ]; !ok {
+						// Broadcast it
+						sendMessage(payload)
+						forwarded[msgKey] = true
+					}
 				}
-			}
-			
-			//log.Debug( myIP.String() + " => message => " + j )
 
-			// Now we start! FSM TIME!
-			switch state {
-			case FOLLOWER:
-				if payload.Type == TIMEOUTTYPE {
-					state = CANDIDATE
-					log.Debug( myIP.String() + " => Changing to CANDIDATE!" )
-					startTimerRand()
-				} else if payload.Type == REQUESTFORVOTETYPE {
-					sendVote(payload.Vote)
-					log.Debug( myIP.String() + " => Sending vote for " + payload.Vote)
-					startTimer()
-				} else if payload.Type == VOTETYPE {
-					votes[payload.Vote] += 1
-					startTimer()
-				} else if payload.Type == PINGTYPE {
-					startTimer()
-					log.Debug( myIP.String() + " => got ping from leader!" )
-				}
-				break
-			case CANDIDATE:
-				if payload.Type == TIMEOUTTYPE {
-					sendRequestVote()
-					log.Debug( myIP.String() + " => ASKING FOR VOTES!" )
-					log.Debug( myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2) )
-					startTimerStar(float32(timeout/2), ENDELECTIONTYPE)
-				} else if payload.Type == REQUESTFORVOTETYPE && !eqIp( myIP, net.ParseIP(payload.Source) ) {
-					state = FOLLOWER
-					sendVote(payload.Vote)
-					log.Debug( myIP.String() + " => Sending vote for " + payload.Vote)
-					startTimer()
-				} else if payload.Type == VOTETYPE {
-					log.Debug( myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source )
-					votes[payload.Vote] += 1
-				} else if payload.Type == ENDELECTIONTYPE {
-					winner := "0.0.0.0"
-					numberVotes := 0
-					for key, value := range votes {
-						if value > numberVotes {
-							winner = key
-							numberVotes = value
+				//log.Debug( myIP.String() + " => message => " + j )
+
+				// Now we start! FSM TIME!
+				switch state {
+				case FOLLOWER:
+					if payload.Type == TIMEOUTTYPE {
+						state = CANDIDATE
+						log.Debug( myIP.String() + " => Changing to CANDIDATE!" )
+						startTimerRand()
+					} else if payload.Type == REQUESTFORVOTETYPE {
+						sendVote(payload.Vote)
+						log.Debug( myIP.String() + " => Sending vote for " + payload.Vote)
+						startTimer()
+					} else if payload.Type == VOTETYPE {
+						votes[payload.Vote] += 1
+						startTimer()
+					} else if payload.Type == PINGTYPE {
+						startTimer()
+						log.Debug( myIP.String() + " => got ping from leader!" )
+					}
+					break
+				case CANDIDATE:
+					if payload.Type == TIMEOUTTYPE {
+						sendRequestVote()
+						log.Debug( myIP.String() + " => ASKING FOR VOTES!" )
+						log.Debug( myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2) )
+						startTimerStar(float32(timeout/2), ENDELECTIONTYPE)
+					} else if payload.Type == REQUESTFORVOTETYPE && !eqIp( myIP, net.ParseIP(payload.Source) ) {
+						state = FOLLOWER
+
+						sendVote(payload.Vote)
+						log.Debug( myIP.String() + " => Sending vote for " + payload.Vote)
+						startTimer()
+					} else if payload.Type == VOTETYPE {
+						log.Debug( myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source )
+						votes[payload.Vote] += 1
+					} else if payload.Type == ENDELECTIONTYPE {
+						winner := "0.0.0.0"
+						numberVotes := 0
+						for key, value := range votes {
+							if value > numberVotes {
+								winner = key
+								numberVotes = value
+							}
+						}
+
+						log.Debug( myIP.String() + " => THE WINNER IS " + winner + " with " + strconv.Itoa(numberVotes) + " votes!" )
+
+						if winner == myIP.String() {
+							state = FOLLOWER
+							log.Debug( myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!" )
+							startTimerStar(float32(timeout/2), TIMEOUTTYPE)
 						}
 					}
-
-					log.Debug( myIP.String() + " => THE WINNER IS " + winner + " with " + strconv.Itoa(numberVotes) + " votes!" )
-
-					if winner == myIP.String() {
-						state = FOLLOWER
-						log.Debug( myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!" )
+					break
+				case LEADER:
+					if payload.Type == TIMEOUTTYPE {
+						sendPing()
 						startTimerStar(float32(timeout/2), TIMEOUTTYPE)
 					}
+					break
+				default:
+					// Welcome to Stranger Things ... THIS REALLY SHOULD NOT HAPPEN
+					break
 				}
-				break
-			case LEADER:
-				if payload.Type == TIMEOUTTYPE {
-					sendPing()
-					startTimerStar(float32(timeout/2), TIMEOUTTYPE)
-				}
-				break
-			default:
-				// Welcome to Stranger Things ... THIS REALLY SHOULD NOT HAPPEN
-				break
 			}
 
 			//log.Debug("ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - attendBufferChannelStartTime) / int64(time.Nanosecond), 10 ))
