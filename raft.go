@@ -189,8 +189,6 @@ func attendBufferChannel() {
 			payload := Packet{}
 			json.Unmarshal([]byte(j), &payload)
 
-			//log.Debug( myIP.String() + " => got ping from leader!" )
-
 			// Actually any message should be broadcasted
 			if !(payload.Type == TIMEOUTTYPE || payload.Type == ENDELECTIONTYPE) { // then broadcast
 			msgKey := payload.Source + "_" + strconv.FormatInt(payload.Timestamp, 10)
@@ -202,6 +200,8 @@ func attendBufferChannel() {
 					continue
 				}
 			}
+
+			log.Debug( myIP.String() + " => message => " + j )
 
 			// Now we start! FSM TIME!
 			switch state {
