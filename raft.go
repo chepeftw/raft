@@ -185,6 +185,19 @@ func eqIp(a net.IP, b net.IP) bool {
 	return treesiplibs.CompareIPs(a, b)
 }
 
+func getCurrentState() string {
+	switch state {
+	case FOLLOWER:
+		return "Follower"
+	case CANDIDATE:
+		return "Candidate"
+	case LEADER:
+		return "Leader"
+	default:
+		return "Error"
+	}
+}
+
 // Function that handles the buffer channel
 func attendBufferChannel() {
 	for {
@@ -229,15 +242,18 @@ func attendBufferChannel() {
 						sendRequestVote()
 						log.Debug(myIP.String() + " => ASKING FOR VOTES!")
 						log.Debug(myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2))
+						log.Debug(myIP.String() + " => My current state is " + getCurrentState())
 						startTimerStar(float32(timeout/2), ENDELECTIONTYPE)
 					} else if payload.Type == REQUESTFORVOTETYPE && !eqIp(myIP, net.ParseIP(payload.Source)) {
 						state = FOLLOWER
 
 						sendVote(payload.Vote)
 						log.Debug(myIP.String() + " => Sending vote for " + payload.Vote)
+						log.Debug(myIP.String() + " => My current state is " + getCurrentState())
 						startTimer()
 					} else if payload.Type == VOTETYPE {
 						log.Debug(myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source)
+						log.Debug(myIP.String() + " => My current state is " + getCurrentState())
 						votes[payload.Vote] += 1
 					} else if payload.Type == ENDELECTIONTYPE {
 						winner := "0.0.0.0"
