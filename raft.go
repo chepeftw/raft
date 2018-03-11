@@ -189,19 +189,21 @@ func attendBufferChannel() {
 			payload := Packet{}
 			json.Unmarshal([]byte(j), &payload)
 
+			if eqIp( myIP, net.ParseIP(payload.Source) ) {
+				continue
+			}
+
 			// Actually any message should be broadcasted
 			if !(payload.Type == TIMEOUTTYPE || payload.Type == ENDELECTIONTYPE) { // then broadcast
 			msgKey := payload.Source + "_" + strconv.FormatInt(payload.Timestamp, 10)
-				if _, ok := forwarded[ msgKey ]; !ok && !eqIp( myIP, net.ParseIP(payload.Source) ) {
+				if _, ok := forwarded[ msgKey ]; !ok {
 					// Broadcast it
 					sendMessage(payload)
 					forwarded[msgKey] = true
-				} else {
-					continue
 				}
 			}
-
-			log.Debug( myIP.String() + " => message => " + j )
+			
+			//log.Debug( myIP.String() + " => message => " + j )
 
 			// Now we start! FSM TIME!
 			switch state {
