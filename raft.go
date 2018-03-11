@@ -94,7 +94,6 @@ func startTimerStar(localTimeout float32, timeoutType int) {
 	timer = time.NewTimer(time.Millisecond * time.Duration( localTimeout ))
 
 	go func() {
-		log.Debug("Timer started for " + strconv.Itoa(int(localTimeout)))
 		<-timer.C
 
 		payload := Packet{
@@ -105,7 +104,7 @@ func startTimerStar(localTimeout float32, timeoutType int) {
 		js, err := json.Marshal(payload)
 		treesiplibs.CheckError(err, log)
 		buffer <- string(js)
-		log.Debug("Timer expired")
+		//log.Debug("Timer expired")
 	}()
 }
 
