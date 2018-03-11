@@ -61,7 +61,7 @@ var buffer = make(chan string)
 var output = make(chan string)
 var done = make(chan bool)
 
-var votes map[string]int
+var votes = make(map[string]int)
 
 var forwarded = make(map[string]bool)
 
