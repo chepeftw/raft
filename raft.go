@@ -88,10 +88,13 @@ func startTimerRand() {
 }
 
 func startTimerStar(localTimeout float32, timeoutType int) {
-	treesiplibs.StopTimeout(timer)
-	timer = treesiplibs.StartTimeoutF(localTimeout)
+	if timer != nil {
+		timer.Stop()
+	}
+	timer = time.NewTimer(time.Millisecond * time.Duration( localTimeout ))
 
 	go func() {
+		log.Debug("Timer started for " + strconv.Itoa(int(localTimeout)))
 		<-timer.C
 
 		payload := Packet{
@@ -105,7 +108,6 @@ func startTimerStar(localTimeout float32, timeoutType int) {
 		log.Debug("Timer expired")
 	}()
 }
-func StopTimer() { treesiplibs.StopTimeout(timer) }
 
 func sendRequestVote() {
 	payload := Packet{
