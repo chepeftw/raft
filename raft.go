@@ -276,7 +276,7 @@ func attendBufferChannel() {
 						log.Debug(myIP.String() + " => THE WINNER IS " + winner + " with " + strconv.Itoa(numberVotes) + " votes!")
 
 						if winner == myIP.String() {
-							state = FOLLOWER
+							state = LEADER
 							log.Debug(myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!")
 							startTimerStar(float32(timeout/2), TIMEOUTTYPE)
 						}
