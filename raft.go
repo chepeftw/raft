@@ -63,6 +63,8 @@ var done = make(chan bool)
 
 var votes map[string]int
 
+var forwarded = make(map[string]bool)
+
 type Packet struct {
 	Source       string     `json:"src"`
 	Type         int        `json:"tpe"`
@@ -186,15 +188,20 @@ func attendBufferChannel() {
 			//log.Debug( myIP.String() + " => got ping from leader!" )
 
 			// Actually any message should be broadcasted
-			//if !(payload.Type == TIMEOUTTYPE || payload.Type == ENDELECTIONTYPE) { // then broadcast
-			//	// Broadcast it
-			//}
+			if !(payload.Type == TIMEOUTTYPE || payload.Type == ENDELECTIONTYPE) { // then broadcast
+			msgKey := payload.Source + "_" + strconv.FormatInt(payload.Timestamp, 10)
+				if _, ok := forwarded[ msgKey ]; !ok {
+					// Broadcast it
+					sendMessage(payload)
+				}
+			}
 
 			// Now we start! FSM TIME!
 			switch state {
 			case FOLLOWER:
 				if payload.Type == TIMEOUTTYPE {
 					state = CANDIDATE
+					log.Debug( myIP.String() + " => Changing to CANDIDATE!" )
 					startTimerRand()
 				} else if payload.Type == REQUESTFORVOTETYPE {
 					sendVote(payload.Vote)
@@ -210,12 +217,14 @@ func attendBufferChannel() {
 			case CANDIDATE:
 				if payload.Type == TIMEOUTTYPE {
 					sendRequestVote()
+					log.Debug( myIP.String() + " => ASKING FOR VOTES!" )
 					startTimerStar(float32(timeout/2), ENDELECTIONTYPE)
 				} else if payload.Type == REQUESTFORVOTETYPE {
 					state = FOLLOWER
 					sendVote(payload.Vote)
 					startTimer()
 				} else if payload.Type == VOTETYPE {
+					log.Debug( myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source )
 					votes[payload.Vote] += 1
 				} else if payload.Type == ENDELECTIONTYPE {
 					winner := "0.0.0.0"
@@ -360,6 +369,8 @@ func main() {
 	go attendBufferChannel()
 	// Run the Output! The channel for communicating with the outside world!
 	go attendOutputChannel()
+
+	startTimerRand()
 
 	buf := make([]byte, 1024)
 
