@@ -11,6 +11,7 @@ import (
 	"github.com/op/go-logging"
 	"github.com/chepeftw/treesiplibs"
 	"math/rand"
+	"strings"
 )
 
 // +++++++++ Go-Logging Conf
@@ -64,6 +65,9 @@ var done = make(chan bool)
 var votes = make(map[string]int)
 
 var forwarded = make(map[string]bool)
+var timestamps = make(map[string]int64)
+
+var timediffs []int64
 
 type Packet struct {
 	Source    string `json:"src"`
@@ -145,6 +149,7 @@ func sendMessage(payload Packet) {
 	output <- string(js)
 
 	forwarded[getMessageKey(payload)] = true
+	timestamps[getMessageKey(payload)] = time.Now().UnixNano()
 }
 
 func getMessageKey(payload Packet) string {
@@ -225,8 +230,16 @@ func attendBufferChannel() {
 						applyVote(payload.Vote)
 						startTimer()
 					} else if payload.Type == PINGTYPE {
+
+						var total int64 = 0
+						for _, value:= range timediffs {
+							total += value
+						}
+						avgTime := total/int64(len(timediffs))
+
 						startTimer()
-						log.Debug(myIP.String() + " => got ping from leader!")
+						log.Debug(myIP.String() + " => got ping from leader! ")
+						log.Debug(myIP.String() + " => AVG_TIME=" + strconv.FormatInt(avgTime, 10))
 					}
 					break
 				case CANDIDATE:
@@ -272,6 +285,10 @@ func attendBufferChannel() {
 					// Welcome to Stranger Things ... THIS REALLY SHOULD NOT HAPPEN
 					break
 				}
+			} else {
+				time1 := timestamps[getMessageKey(payload)]
+				timediff := time.Now().UnixNano() - time1
+				timediffs = append(timediffs, timediff)
 			}
 
 			//log.Debug("ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - attendBufferChannelStartTime) / int64(time.Nanosecond), 10 ))
