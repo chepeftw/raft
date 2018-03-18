@@ -120,7 +120,7 @@ func sendRequestVote() {
 }
 
 func sendVote(voteFor string) {
-	time.Sleep(time.Millisecond * time.Duration(rndm.Intn(1000)))
+	//time.Sleep(time.Millisecond * time.Duration(rndm.Intn(1000)))
 	payload := Packet{
 		Source:    myIP.String(),
 		Type:      VOTETYPE,
