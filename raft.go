@@ -11,7 +11,6 @@ import (
 	"github.com/op/go-logging"
 	"github.com/chepeftw/treesiplibs"
 	"math/rand"
-	"strings"
 )
 
 // +++++++++ Go-Logging Conf
