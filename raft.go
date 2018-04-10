@@ -22,7 +22,7 @@ var format = logging.MustStringFormatter(
 // +++++++++ Constants
 const (
 	DefPort       = 10001
-	DefTimeout    = 10000
+	DefTimeout    = 2000
 	Protocol      = "udp"
 	BroadcastAddr = "255.255.255.255"
 	LocalhostAddr = "127.0.0.1"
@@ -120,7 +120,7 @@ func sendRequestVote() {
 }
 
 func sendVote(voteFor string) {
-	//time.Sleep(time.Millisecond * time.Duration(rndm.Intn(1000)))
+	time.Sleep(time.Millisecond * time.Duration(rndm.Intn(500)))
 	payload := Packet{
 		Source:    myIP.String(),
 		Type:      VOTETYPE,
@@ -171,8 +171,8 @@ func attendOutputChannel() {
 			if Conn != nil {
 				buf := []byte(j)
 				_, err = Conn.Write(buf)
-				//log.Debug( myIP.String() + " " + j + " MESSAGE_SIZE=" + strconv.Itoa(len(buf)) )
-				//log.Info( myIP.String() + " SENDING_MESSAGE=1" )
+				log.Debug( myIP.String() + " " + j + " MESSAGE_SIZE=" + strconv.Itoa(len(buf)) )
+				log.Info( myIP.String() + " SENDING_MESSAGE=1" )
 				treesiplibs.CheckError(err, log)
 			}
 		} else {
@@ -199,7 +199,7 @@ func attendBufferChannel() {
 	for {
 		j, more := <-buffer
 		if more {
-			//attendBufferChannelStartTime := time.Now().UnixNano() // Start time of the monitoring process
+			attendBufferChannelStartTime := time.Now().UnixNano() // Start time of the monitoring process
 
 			// First we take the json, unmarshal it to an object
 			payload := Packet{}
@@ -211,7 +211,6 @@ func attendBufferChannel() {
 					// Broadcast it
 					sendMessage(payload)
 				}
-
 				//log.Debug( myIP.String() + " => message => " + j )
 
 				// Now we start! FSM TIME!
@@ -272,6 +271,9 @@ func attendBufferChannel() {
 							log.Debug(myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!")
 							startTimerStar(float32(timeout/2), TIMEOUTTYPE)
 						}
+					} else if payload.Type == PINGTYPE {
+						state = FOLLOWER
+						startTimer()
 					}
 					break
 				case LEADER:
@@ -290,7 +292,7 @@ func attendBufferChannel() {
 				timediffs = append(timediffs, timediff)
 			}
 
-			//log.Debug("ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - attendBufferChannelStartTime) / int64(time.Nanosecond), 10 ))
+			log.Debug("ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - attendBufferChannelStartTime) / int64(time.Nanosecond), 10 ))
 
 		} else {
 			log.Debug("closing channel")
