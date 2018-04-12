@@ -13,6 +13,13 @@ import (
 	"math/rand"
 )
 
+// RAFT_MESSAGE_SIZE
+// RAFT_SENDING_MESSAGE
+// RAFT_AVG_TIME
+// RAFT_WINNER
+// RAFT_ELECTION_TIME
+// RAFT_ATTEND_BUFFER_CHANNEL_START_TIME
+
 // +++++++++ Go-Logging Conf
 var log = logging.MustGetLogger("raft")
 var format = logging.MustStringFormatter(
@@ -38,7 +45,7 @@ const (
 	REQUESTFORVOTETYPE = iota
 	VOTETYPE
 	TIMEOUTTYPE
-	ENDELECTIONTYPE
+	PRE_ENDELECTIONTYPE
 	PINGTYPE
 )
 
@@ -47,12 +54,13 @@ var state = FOLLOWER
 var myIP = net.ParseIP(LocalhostAddr)
 
 var timeout = 0
+var pingSent = 0
+var monitoringStartTime = int64(0)
 
 var timer *time.Timer
 
 var rndm = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-// +++++++++ Multi node support
 var Port = ":0"
 var PortInt = 0
 
@@ -132,6 +140,7 @@ func sendVote(voteFor string) {
 }
 
 func sendPing() {
+	pingSent = pingSent + 1
 	payload := Packet{
 		Source:    myIP.String(),
 		Type:      PINGTYPE,
@@ -171,8 +180,8 @@ func attendOutputChannel() {
 			if Conn != nil {
 				buf := []byte(j)
 				_, err = Conn.Write(buf)
-				log.Debug( myIP.String() + " " + j + " MESSAGE_SIZE=" + strconv.Itoa(len(buf)) )
-				log.Info( myIP.String() + " SENDING_MESSAGE=1" )
+				log.Debug( myIP.String() + " " + j + " RAFT_MESSAGE_SIZE=" + strconv.Itoa(len(buf)) )
+				log.Debug( myIP.String() + " RAFT_SENDING_MESSAGE=1" )
 				treesiplibs.CheckError(err, log)
 			}
 		} else {
@@ -199,7 +208,7 @@ func attendBufferChannel() {
 	for {
 		j, more := <-buffer
 		if more {
-			attendBufferChannelStartTime := time.Now().UnixNano() // Start time of the monitoring process
+			attendBufferChannelStartTime := time.Now().UnixNano() // Start time of the reception of a message
 
 			// First we take the json, unmarshal it to an object
 			payload := Packet{}
@@ -207,7 +216,7 @@ func attendBufferChannel() {
 
 			if _, ok := forwarded[ getMessageKey(payload) ]; !ok && !eqIp(myIP, net.ParseIP(payload.Source)) {
 				// Actually any message should be broadcasted
-				if !(payload.Type == TIMEOUTTYPE || payload.Type == ENDELECTIONTYPE) { // then broadcast
+				if !(payload.Type == TIMEOUTTYPE || payload.Type == PRE_ENDELECTIONTYPE) { // then broadcast
 					// Broadcast it
 					sendMessage(payload)
 				}
@@ -237,7 +246,7 @@ func attendBufferChannel() {
 
 						startTimer()
 						log.Debug(myIP.String() + " => got ping from leader! ")
-						log.Debug(myIP.String() + " => AVG_TIME=" + strconv.FormatInt(avgTime, 10))
+						log.Debug(myIP.String() + " => RAFT_AVG_TIME=" + strconv.FormatInt(avgTime, 10))
 					}
 					break
 				case CANDIDATE:
@@ -245,7 +254,7 @@ func attendBufferChannel() {
 						sendRequestVote()
 						log.Debug(myIP.String() + " => ASKING FOR VOTES!")
 						log.Debug(myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2))
-						startTimerStar(float32(timeout/2), ENDELECTIONTYPE)
+						startTimerStar(float32(timeout/2), PRE_ENDELECTIONTYPE)
 					} else if payload.Type == REQUESTFORVOTETYPE && !eqIp(myIP, net.ParseIP(payload.Source)) {
 						state = FOLLOWER
 						sendVote(payload.Vote)
@@ -254,7 +263,7 @@ func attendBufferChannel() {
 					} else if payload.Type == VOTETYPE {
 						log.Debug(myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source)
 						applyVote(payload.Vote)
-					} else if payload.Type == ENDELECTIONTYPE {
+					} else if payload.Type == PRE_ENDELECTIONTYPE {
 						winner := "0.0.0.0"
 						numberVotes := 0
 						for key, value := range votes {
@@ -269,6 +278,8 @@ func attendBufferChannel() {
 						if winner == myIP.String() {
 							state = LEADER
 							log.Debug(myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!")
+							log.Debug("RAFT_WINNER=" + myIP.String())
+							log.Debug("RAFT_ELECTION_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - monitoringStartTime) / int64(time.Nanosecond), 10 ))
 							startTimerStar(float32(timeout/2), TIMEOUTTYPE)
 						}
 					} else if payload.Type == PINGTYPE {
@@ -292,7 +303,7 @@ func attendBufferChannel() {
 				timediffs = append(timediffs, timediff)
 			}
 
-			log.Debug("ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - attendBufferChannelStartTime) / int64(time.Nanosecond), 10 ))
+			log.Debug("RAFT_ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - attendBufferChannelStartTime) / int64(time.Nanosecond), 10 ))
 
 		} else {
 			log.Debug("closing channel")
@@ -338,7 +349,7 @@ func main() {
 		os.MkdirAll(logPath, 0777)
 	}
 
-	var logFile = logPath + "raft" + strconv.Itoa(PortInt) + ".log"
+	var logFile = logPath + "raft.log"
 	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		fmt.Printf("error opening file: %v", err)
@@ -404,6 +415,7 @@ func main() {
 	// Run the Output! The channel for communicating with the outside world!
 	go attendOutputChannel()
 
+	monitoringStartTime = time.Now().UnixNano() // Start time of the leader election process
 	startTimerRand()
 
 	buf := make([]byte, 1024)
