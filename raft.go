@@ -289,6 +289,11 @@ func attendBufferChannel() {
 					break
 				case LEADER:
 					if payload.Type == TIMEOUTTYPE {
+
+						if pingSent > 5 {
+							log.Debug("PLEASE_EXIT=1" )
+						}
+
 						sendPing()
 						startTimerStar(float32(timeout/2), TIMEOUTTYPE)
 					}
