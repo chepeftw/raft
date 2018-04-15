@@ -291,7 +291,7 @@ func attendBufferChannel() {
 					if payload.Type == TIMEOUTTYPE {
 
 						if pingSent > 5 {
-							log.Debug("PLEASE_EXIT=1" )
+							log.Debug("PLEASE_EXIT=1234" )
 						}
 
 						sendPing()
