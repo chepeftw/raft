@@ -290,7 +290,7 @@ func attendBufferChannel() {
 				case LEADER:
 					if payload.Type == TIMEOUTTYPE {
 
-						if pingSent > 5 {
+						if pingSent > 2 {
 							log.Debug("PLEASE_EXIT=1234" )
 						}
 
