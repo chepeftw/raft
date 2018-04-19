@@ -79,7 +79,7 @@ func startTimerRand() {
 	s1 := rndm.Intn(2000000)
 	s2 := rndm.Intn(2000000)
 	s3 := rndm.Intn(1000000)
-	randomTimeout := float32((s1 + s2 + s3) / 1000)
+	randomTimeout := float32((s1 + s2 + s3) / 2500)
 
 	startTimerStar(randomTimeout, bchainlibs.RaftTimeout)
 }
@@ -214,7 +214,7 @@ func attendBufferChannel() {
 
 			if _, ok := forwarded[ getMessageKey(payload) ]; !ok && !eqIp(myIP, net.ParseIP(payload.Source)) {
 				// Actually any message should be broadcasted
-				if !(payload.Type == bchainlibs.RaftTimeout || payload.Type == bchainlibs.EndElection) { // then broadcast
+				if !(payload.Type == bchainlibs.RaftTimeout || payload.Type == bchainlibs.EndElection || payload.Type == bchainlibs.StartRaft) { // then broadcast
 					// Broadcast it
 					sendMessage(payload)
 				}
