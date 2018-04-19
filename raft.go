@@ -128,6 +128,7 @@ func sendVote(voteFor string) {
 
 func sendPing() {
 	pingSent = pingSent + 1
+	log.Debug( myIP.String() + " RAFT_SENDING_PING=1" )
 	payload := Packet{
 		Source:    myIP.String(),
 		Type:      bchainlibs.LeaderPing,
@@ -304,7 +305,7 @@ func attendBufferChannel() {
 				case LEADER:
 					if payload.Type == bchainlibs.RaftTimeout {
 
-						if pingSent > 2 {
+						if pingSent == 3 {
 							log.Debug("PLEASE_EXIT=1234" )
 						}
 
