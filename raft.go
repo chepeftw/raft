@@ -88,6 +88,7 @@ func startTimerStar(localTimeout float32, timeoutType int) {
 	if timer != nil {
 		timer.Stop()
 	}
+	log.Debug( myIP.String() + " Starting timer for " + strconv.Itoa(timeoutType) + "ms" )
 	timer = time.NewTimer(time.Millisecond * time.Duration( localTimeout ))
 
 	go func() {
