@@ -223,6 +223,7 @@ func attendBufferChannel() {
 				// Now we start! FSM TIME!
 				switch state {
 				case IDLE:
+					log.Debug( myIP.String() + " => message => " + j )
 					if payload.Type == bchainlibs.StartRaft {
 						log.Info("ANNOUNCEMENT: START RAFT")
 						state = FOLLOWER
