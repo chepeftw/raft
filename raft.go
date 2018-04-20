@@ -28,7 +28,7 @@ var format = logging.MustStringFormatter(
 
 // +++++++++ Constants
 const (
-	DefTimeout    = 2000
+	DefTimeout = 2000
 )
 
 const (
@@ -88,13 +88,13 @@ func startTimerStar(localTimeout float32, timeoutType int) {
 	if timer != nil {
 		timer.Stop()
 	}
-	log.Debug( myIP.String() + " Starting timer for " + strconv.Itoa(timeoutType) + "ms" )
-	timer = time.NewTimer(time.Millisecond * time.Duration( localTimeout ))
+	log.Debug(myIP.String() + " Starting timer for " + strconv.Itoa(timeoutType) + "ms")
+	timer = time.NewTimer(time.Millisecond * time.Duration(localTimeout))
 
 	go func() {
 		<-timer.C
 
-		payload := Packet{ Source: "0.0.0.0", Type: timeoutType }
+		payload := Packet{Source: "0.0.0.0", Type: timeoutType}
 
 		js, err := json.Marshal(payload)
 		bchainlibs.CheckError(err, log)
@@ -128,7 +128,7 @@ func sendVote(voteFor string) {
 
 func sendPing() {
 	pingSent = pingSent + 1
-	log.Debug( myIP.String() + " RAFT_SENDING_PING=1" )
+	log.Debug(myIP.String() + " RAFT_SENDING_PING=1")
 	payload := Packet{
 		Source:    myIP.String(),
 		Type:      bchainlibs.LeaderPing,
@@ -168,8 +168,8 @@ func attendOutputChannel() {
 			if Conn != nil {
 				buf := []byte(j)
 				_, err = Conn.Write(buf)
-				log.Debug( myIP.String() + " " + j + " RAFT_MESSAGE_SIZE=" + strconv.Itoa(len(buf)) )
-				log.Debug( myIP.String() + " RAFT_SENDING_MESSAGE=1" )
+				log.Debug(myIP.String() + " " + j + " RAFT_MESSAGE_SIZE=" + strconv.Itoa(len(buf)))
+				log.Debug(myIP.String() + " RAFT_SENDING_MESSAGE=1")
 				bchainlibs.CheckError(err, log)
 			}
 		} else {
@@ -225,7 +225,7 @@ func attendBufferChannel() {
 				// Now we start! FSM TIME!
 				switch state {
 				case IDLE:
-					log.Debug( myIP.String() + " => message => " + j )
+					log.Debug(myIP.String() + " => message => " + j)
 					if payload.Type == bchainlibs.StartRaft {
 						log.Info("ANNOUNCEMENT: START RAFT")
 						state = FOLLOWER
@@ -248,10 +248,10 @@ func attendBufferChannel() {
 					} else if payload.Type == bchainlibs.LeaderPing {
 
 						var total int64 = 0
-						for _, value:= range timediffs {
+						for _, value := range timediffs {
 							total += value
 						}
-						avgTime := total/int64(len(timediffs))
+						avgTime := total / int64(len(timediffs))
 
 						startTimer()
 						log.Debug(myIP.String() + " => got ping from leader! ")
@@ -291,7 +291,7 @@ func attendBufferChannel() {
 							state = LEADER
 							log.Debug(myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!")
 							log.Debug("RAFT_WINNER=" + myIP.String())
-							log.Debug("RAFT_ELECTION_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - monitoringStartTime) / int64(time.Nanosecond), 10 ))
+							log.Debug("RAFT_ELECTION_TIME=" + strconv.FormatInt((time.Now().UnixNano()-monitoringStartTime)/int64(time.Nanosecond), 10))
 							startTimerStar(float32(timeout/2), bchainlibs.RaftTimeout)
 						}
 					} else if payload.Type == bchainlibs.LeaderPing {
@@ -306,7 +306,7 @@ func attendBufferChannel() {
 					if payload.Type == bchainlibs.RaftTimeout {
 
 						if pingSent == 3 {
-							log.Debug("PLEASE_EXIT=1234" )
+							log.Debug("PLEASE_EXIT=1234")
 						}
 
 						sendPing()
@@ -326,7 +326,7 @@ func attendBufferChannel() {
 				timediffs = append(timediffs, timediff)
 			}
 
-			log.Debug("RAFT_ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt( (time.Now().UnixNano() - attendBufferChannelStartTime) / int64(time.Nanosecond), 10 ))
+			log.Debug("RAFT_ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt((time.Now().UnixNano()-attendBufferChannelStartTime)/int64(time.Nanosecond), 10))
 
 		} else {
 			log.Debug("closing channel")
@@ -437,7 +437,7 @@ func main() {
 		log.Info("ANNOUNCEMENT: Forcing Start")
 		genesis := Packet{
 			Source: "0.0.0.0",
-			Type: bchainlibs.StartRaft,
+			Type:   bchainlibs.StartRaft,
 		}
 		js, err := json.Marshal(genesis)
 		bchainlibs.CheckError(err, log)
