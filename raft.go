@@ -40,6 +40,7 @@ const (
 
 // +++++++++ Global vars
 var state = IDLE
+var standAlone = 1
 var myIP = net.ParseIP(bchainlibs.LocalhostAddr)
 
 var timeout = 0
@@ -56,6 +57,7 @@ var output = make(chan string)
 var done = make(chan bool)
 
 var votes = make(map[string]int)
+var electionTime int64
 
 var forwarded = make(map[string]bool)
 var timestamps = make(map[string]int64)
@@ -63,12 +65,13 @@ var timestamps = make(map[string]int64)
 var timediffs []int64
 
 type Packet struct {
-	Source    string `json:"src"`
-	Type      int    `json:"tpe"`
-	Action    int    `json:"act,omitempty"`
-	Vote      string `json:"vot,omitempty"`
-	Message   string `json:"msg,omitempty"`
-	Timestamp int64  `json:"tst"`
+	Source       string `json:"src"`
+	Type         int    `json:"tpe"`
+	Action       int    `json:"act,omitempty"`
+	Vote         string `json:"vot,omitempty"`
+	Message      string `json:"msg,omitempty"`
+	Timestamp    int64  `json:"tst,omitempty"`
+	ElectionTime int64  `json:"elcTm,omitempty"`
 }
 
 func startTimer() {
@@ -134,6 +137,7 @@ func sendPing() {
 		Type:      bchainlibs.LeaderPing,
 		Message:   "ping",
 		Timestamp: time.Now().UnixNano(),
+		ElectionTime: electionTime,
 	}
 
 	sendMessage(payload)
@@ -289,6 +293,7 @@ func attendBufferChannel() {
 
 						if winner == myIP.String() {
 							state = LEADER
+							electionTime = time.Now().UnixNano()
 							log.Debug(myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!")
 							log.Debug("RAFT_WINNER=" + myIP.String())
 							log.Debug("RAFT_ELECTION_TIME=" + strconv.FormatInt((time.Now().UnixNano()-monitoringStartTime)/int64(time.Nanosecond), 10))
@@ -303,10 +308,21 @@ func attendBufferChannel() {
 					}
 					break
 				case LEADER:
-					if payload.Type == bchainlibs.RaftTimeout {
+					if payload.Type == bchainlibs.LeaderPing {
+						if payload.ElectionTime < electionTime {
+							state = FOLLOWER
+							log.Debug("RAFT_REVERSE_WINNER=" + myIP.String())
+							startTimer()
+						}
+					} else if payload.Type == bchainlibs.RaftTimeout {
 
-						if pingSent == 3 {
-							log.Debug("PLEASE_EXIT=1234")
+						if pingSent == 7 {
+							if standAlone > 0 {
+								log.Debug("PLEASE_EXIT=1234")
+							} else {
+								//sendToMiner()
+								log.Debug("SEND TO MINER!!!")
+							}
 						}
 
 						sendPing()
@@ -348,7 +364,7 @@ func main() {
 
 	// Getting targetSync from confFile
 	targetSync := float64(0)
-	standAlone := 1
+	standAlone = 1
 	if _, err := os.Stat("/app/conf.yml"); err == nil {
 		var c bchainlibs.Conf
 		c.GetConf("/app/conf.yml")
