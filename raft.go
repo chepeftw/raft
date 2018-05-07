@@ -217,7 +217,7 @@ func applyVote(ip string) {
 func stopRaft() {
 	state = IDLE
 	votes = make(map[string]int)
-	forwarded = make(map[string]bool)
+	//forwarded = make(map[string]bool)
 	timestamps = make(map[string]int64)
 	timediffs = []int64{}
 
