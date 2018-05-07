@@ -408,11 +408,14 @@ func main() {
 	backend := logging.NewLogBackend(f, "", 0)
 	backend2 := logging.NewLogBackend(f2, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, bchainlibs.LogFormat)
+
+	backend2Formatter := logging.NewBackendFormatter(backend2, bchainlibs.LogFormatPimp)
+
 	backendLeveled := logging.AddModuleLevel(backendFormatter)
 	backendLeveled.SetLevel(logging.DEBUG, "")
 
 	// Only errors and more severe messages should be sent to backend1
-	backend2Leveled := logging.AddModuleLevel(backend2)
+	backend2Leveled := logging.AddModuleLevel(backend2Formatter)
 	backend2Leveled.SetLevel(logging.INFO, "")
 
 	logging.SetBackend(backendLeveled, backend2Leveled)
