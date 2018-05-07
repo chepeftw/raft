@@ -41,7 +41,7 @@ const (
 // +++++++++ Global vars
 var state = IDLE
 var standAlone = 1
-var myIP = net.ParseIP(bchainlibs.LocalhostAddr)
+var me = net.ParseIP(bchainlibs.LocalhostAddr)
 
 var timeout = 0
 var pingSent = 0
@@ -53,6 +53,7 @@ var rndm = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // +++++++++ Channels
 var buffer = make(chan string)
+var raft = make(chan string)
 var output = make(chan string)
 var done = make(chan bool)
 
@@ -64,15 +65,15 @@ var timestamps = make(map[string]int64)
 
 var timediffs []int64
 
-type Packet struct {
-	Source       string `json:"src"`
-	Type         int    `json:"tpe"`
-	Action       int    `json:"act,omitempty"`
-	Vote         string `json:"vot,omitempty"`
-	Message      string `json:"msg,omitempty"`
-	Timestamp    int64  `json:"tst,omitempty"`
-	ElectionTime int64  `json:"elcTm,omitempty"`
-}
+//type Packet struct {
+//	Source       string `json:"src"`
+//	Type         int    `json:"tpe"`
+//	Action       int    `json:"act,omitempty"`
+//	Vote         string `json:"vot,omitempty"`
+//	Message      string `json:"msg,omitempty"`
+//	Timestamp    int64  `json:"tst,omitempty"`
+//	ElectionTime int64  `json:"elcTm,omitempty"`
+//}
 
 func startTimer() {
 	startTimerStar(float32(timeout), bchainlibs.RaftTimeout)
@@ -91,26 +92,26 @@ func startTimerStar(localTimeout float32, timeoutType int) {
 	if timer != nil {
 		timer.Stop()
 	}
-	log.Debug(myIP.String() + " Starting timer for " + strconv.Itoa(timeoutType) + "ms")
+	toDebug("Starting timer for " + strconv.Itoa(timeoutType) + "ms")
 	timer = time.NewTimer(time.Millisecond * time.Duration(localTimeout))
 
 	go func() {
 		<-timer.C
 
-		payload := Packet{Source: "0.0.0.0", Type: timeoutType}
+		payload := bchainlibs.Packet{Source: net.ParseIP("0.0.0.0"), Type: timeoutType}
 
 		js, err := json.Marshal(payload)
 		bchainlibs.CheckError(err, log)
 		buffer <- string(js)
-		//log.Debug("Timer expired")
+		//toLog("Timer expired")
 	}()
 }
 
 func sendRequestVote() {
-	payload := Packet{
-		Source:    myIP.String(),
+	payload := bchainlibs.Packet{
+		Source:    me,
 		Type:      bchainlibs.RequestForVote,
-		Vote:      myIP.String(),
+		Vote:      me.String(),
 		Timestamp: time.Now().UnixNano(),
 	}
 
@@ -119,8 +120,8 @@ func sendRequestVote() {
 
 func sendVote(voteFor string) {
 	time.Sleep(time.Millisecond * time.Duration(rndm.Intn(500)))
-	payload := Packet{
-		Source:    myIP.String(),
+	payload := bchainlibs.Packet{
+		Source:    me,
 		Type:      bchainlibs.Vote,
 		Vote:      voteFor,
 		Timestamp: time.Now().UnixNano(),
@@ -131,9 +132,9 @@ func sendVote(voteFor string) {
 
 func sendPing() {
 	pingSent = pingSent + 1
-	log.Debug(myIP.String() + " RAFT_SENDING_PING=1")
-	payload := Packet{
-		Source:    myIP.String(),
+	toDebug("RAFT_SENDING_PING=1")
+	payload := bchainlibs.Packet{
+		Source:    me,
 		Type:      bchainlibs.LeaderPing,
 		Message:   "ping",
 		Timestamp: time.Now().UnixNano(),
@@ -143,37 +144,58 @@ func sendPing() {
 	sendMessage(payload)
 }
 
-func sendMessage(payload Packet) {
+func sendMessage(payload bchainlibs.Packet) {
 	js, err := json.Marshal(payload)
 	bchainlibs.CheckError(err, log)
-	output <- string(js)
+	raft <- string(js)
 
 	forwarded[getMessageKey(payload)] = true
 	timestamps[getMessageKey(payload)] = time.Now().UnixNano()
 }
 
-func getMessageKey(payload Packet) string {
-	return payload.Source + "_" + strconv.FormatInt(payload.Timestamp, 10)
+func getMessageKey(payload bchainlibs.Packet) string {
+	return payload.Source.String() + "_" + strconv.FormatInt(payload.Timestamp, 10)
 }
 
-// Function that handles the output channel
+
+// Functions to communicate with the Router
+func toOutput(payload bchainlibs.Packet) {
+	toDebug("Sending Packet with ID " + payload.ID + " to channel output")
+	bchainlibs.SendGeneric(output, payload, log)
+}
+
 func attendOutputChannel() {
+	toInfo("Starting output channel")
+	bchainlibs.SendToNetwork(me.String(), bchainlibs.RouterPort, output, false, log, me)
+}
+
+func toDebug(msg string) {
+	log.Debug(me.String() + " " + msg)
+}
+func toInfo(msg string) {
+	log.Info(me.String() + " " + msg)
+}
+
+
+
+// Function that handles the raft channel
+func attendRaftChannel() {
 	ServerAddr, err := net.ResolveUDPAddr(bchainlibs.Protocol, bchainlibs.BroadcastAddr+bchainlibs.RaftPort)
 	bchainlibs.CheckError(err, log)
-	LocalAddr, err := net.ResolveUDPAddr(bchainlibs.Protocol, myIP.String()+":0")
+	LocalAddr, err := net.ResolveUDPAddr(bchainlibs.Protocol, me.String()+":0")
 	bchainlibs.CheckError(err, log)
 	Conn, err := net.DialUDP(bchainlibs.Protocol, LocalAddr, ServerAddr)
 	bchainlibs.CheckError(err, log)
 	defer Conn.Close()
 
 	for {
-		j, more := <-output
+		j, more := <-raft
 		if more {
 			if Conn != nil {
 				buf := []byte(j)
 				_, err = Conn.Write(buf)
-				log.Debug(myIP.String() + " " + j + " RAFT_MESSAGE_SIZE=" + strconv.Itoa(len(buf)))
-				log.Debug(myIP.String() + " RAFT_SENDING_MESSAGE=1")
+				toDebug(j + " RAFT_MESSAGE_SIZE=" + strconv.Itoa(len(buf)))
+				toDebug("RAFT_SENDING_MESSAGE=1")
 				bchainlibs.CheckError(err, log)
 			}
 		} else {
@@ -215,23 +237,28 @@ func attendBufferChannel() {
 			attendBufferChannelStartTime := time.Now().UnixNano() // Start time of the reception of a message
 
 			// First we take the json, unmarshal it to an object
-			payload := Packet{}
+			payload := bchainlibs.Packet{}
 			json.Unmarshal([]byte(j), &payload)
 
-			if _, ok := forwarded[ getMessageKey(payload) ]; !ok && !eqIp(myIP, net.ParseIP(payload.Source)) {
+			if _, ok := forwarded[ getMessageKey(payload) ]; !ok && !eqIp(me, payload.Source) {
 				// Actually any message should be broadcasted
-				if !(payload.Type == bchainlibs.RaftTimeout || payload.Type == bchainlibs.EndElection || payload.Type == bchainlibs.StartRaft) { // then broadcast
+				if !(payload.Type == bchainlibs.RaftTimeout || payload.Type == bchainlibs.EndElection || payload.Type == bchainlibs.RaftStart) { // then broadcast
 					// Broadcast it
 					sendMessage(payload)
 				}
-				//log.Debug( myIP.String() + " => message => " + j )
+				//toLog( "=> message => " + j )
+
+				if payload.Type == bchainlibs.RaftStop {
+					toInfo("ANNOUNCEMENT: STOP RAFT")
+					stopRaft()
+				}
 
 				// Now we start! FSM TIME!
 				switch state {
 				case IDLE:
-					log.Debug(myIP.String() + " => message => " + j)
-					if payload.Type == bchainlibs.StartRaft {
-						log.Info("ANNOUNCEMENT: START RAFT")
+					toDebug("=> message => " + j)
+					if payload.Type == bchainlibs.RaftStart {
+						toInfo("ANNOUNCEMENT: START RAFT")
 						state = FOLLOWER
 						monitoringStartTime = time.Now().UnixNano() // Start time of the leader election process
 						startTimerRand()
@@ -240,11 +267,11 @@ func attendBufferChannel() {
 				case FOLLOWER:
 					if payload.Type == bchainlibs.RaftTimeout {
 						state = CANDIDATE
-						log.Debug(myIP.String() + " => Changing to CANDIDATE!")
+						toInfo("=> Changing to CANDIDATE!")
 						startTimerRand()
 					} else if payload.Type == bchainlibs.RequestForVote {
 						sendVote(payload.Vote)
-						log.Debug(myIP.String() + " => Sending vote for " + payload.Vote)
+						toInfo("=> Sending vote for " + payload.Vote)
 						startTimer()
 					} else if payload.Type == bchainlibs.Vote {
 						applyVote(payload.Vote)
@@ -258,26 +285,23 @@ func attendBufferChannel() {
 						avgTime := total / int64(len(timediffs))
 
 						startTimer()
-						log.Debug(myIP.String() + " => got ping from leader! ")
-						log.Debug(myIP.String() + " => RAFT_AVG_TIME=" + strconv.FormatInt(avgTime, 10))
-					} else if payload.Type == bchainlibs.StopRaft {
-						log.Info("ANNOUNCEMENT: STOP RAFT")
-						stopRaft()
+						toInfo("=> got ping from leader! ")
+						toDebug("=> RAFT_AVG_TIME=" + strconv.FormatInt(avgTime, 10))
 					}
 					break
 				case CANDIDATE:
 					if payload.Type == bchainlibs.RaftTimeout {
 						sendRequestVote()
-						log.Debug(myIP.String() + " => ASKING FOR VOTES!")
-						log.Debug(myIP.String() + " => Timeout in " + strconv.Itoa(timeout/2))
+						toInfo("=> ASKING FOR VOTES!")
+						toInfo("=> Timeout in " + strconv.Itoa(timeout/2))
 						startTimerStar(float32(timeout/2), bchainlibs.EndElection)
-					} else if payload.Type == bchainlibs.RequestForVote && !eqIp(myIP, net.ParseIP(payload.Source)) {
+					} else if payload.Type == bchainlibs.RequestForVote && !eqIp(me, payload.Source) {
 						state = FOLLOWER
 						sendVote(payload.Vote)
-						log.Debug(myIP.String() + " => Sending vote for " + payload.Vote)
+						toInfo("=> Sending vote for " + payload.Vote)
 						startTimer()
 					} else if payload.Type == bchainlibs.Vote {
-						log.Debug(myIP.String() + " => Received vote for " + payload.Vote + " from " + payload.Source)
+						toDebug("=> Received vote for " + payload.Vote + " from " + payload.Source.String())
 						applyVote(payload.Vote)
 					} else if payload.Type == bchainlibs.EndElection {
 						winner := "0.0.0.0"
@@ -289,47 +313,42 @@ func attendBufferChannel() {
 							}
 						}
 
-						log.Debug(myIP.String() + " => THE WINNER IS " + winner + " with " + strconv.Itoa(numberVotes) + " votes!")
+						toInfo("=> THE WINNER IS " + winner + " with " + strconv.Itoa(numberVotes) + " votes!")
 
-						if winner == myIP.String() {
+						if winner == me.String() {
 							state = LEADER
 							electionTime = time.Now().UnixNano()
-							log.Debug(myIP.String() + " => I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!")
-							log.Debug("RAFT_WINNER=" + myIP.String())
-							log.Debug("RAFT_ELECTION_TIME=" + strconv.FormatInt((time.Now().UnixNano()-monitoringStartTime)/int64(time.Nanosecond), 10))
+							toInfo("=> I AM THE MASTER OF THE UNIVERSE!!! ALL HAIL THE NEW LEADER!")
+							toDebug("RAFT_WINNER=" + me.String())
+							toDebug("RAFT_ELECTION_TIME=" + strconv.FormatInt((time.Now().UnixNano()-monitoringStartTime)/int64(time.Nanosecond), 10))
 							startTimerStar(float32(timeout/2), bchainlibs.RaftTimeout)
 						}
 					} else if payload.Type == bchainlibs.LeaderPing {
 						state = FOLLOWER
 						startTimer()
-					} else if payload.Type == bchainlibs.StopRaft {
-						log.Info("ANNOUNCEMENT: STOP RAFT")
-						stopRaft()
 					}
 					break
 				case LEADER:
 					if payload.Type == bchainlibs.LeaderPing {
 						if payload.ElectionTime < electionTime {
 							state = FOLLOWER
-							log.Debug("RAFT_REVERSE_WINNER=" + myIP.String())
+							toDebug("RAFT_REVERSE_WINNER=" + me.String())
 							startTimer()
 						}
 					} else if payload.Type == bchainlibs.RaftTimeout {
 
 						if pingSent == 7 {
 							if standAlone > 0 {
-								log.Debug("PLEASE_EXIT=1234")
+								toDebug("PLEASE_EXIT=1234")
 							} else {
-								//sendToMiner()
-								log.Debug("SEND TO MINER!!!")
+								winner := bchainlibs.CreateRaftResultPacket(me)
+								toOutput(winner)
+								toDebug("SEND TO MINER!!!")
 							}
 						}
 
 						sendPing()
 						startTimerStar(float32(timeout/2), bchainlibs.RaftTimeout)
-					} else if payload.Type == bchainlibs.StopRaft {
-						log.Info("ANNOUNCEMENT: STOP RAFT")
-						stopRaft()
 					}
 					break
 				default:
@@ -342,10 +361,10 @@ func attendBufferChannel() {
 				timediffs = append(timediffs, timediff)
 			}
 
-			log.Debug("RAFT_ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt((time.Now().UnixNano()-attendBufferChannelStartTime)/int64(time.Nanosecond), 10))
+			toDebug("RAFT_ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt((time.Now().UnixNano()-attendBufferChannelStartTime)/int64(time.Nanosecond), 10))
 
 		} else {
-			log.Debug("closing channel")
+			toDebug("closing channel")
 			done <- true
 			return
 		}
@@ -431,8 +450,8 @@ func main() {
 	// ------------
 
 	// But first let me take a selfie, in a Go lang program is getting my own IP
-	myIP = bchainlibs.SelfieIP()
-	log.Info("Good to go, my ip is " + myIP.String() + " and port is " + bchainlibs.RaftPort)
+	me = bchainlibs.SelfieIP()
+	log.Info("Good to go, my ip is " + me.String() + " and port is " + bchainlibs.RaftPort)
 
 	// Lets prepare a address at any address at port Port
 	ServerAddr, err := net.ResolveUDPAddr(bchainlibs.Protocol, bchainlibs.RaftPort)
@@ -446,19 +465,18 @@ func main() {
 	// Run the FSM! The one in charge of everything
 	go attendBufferChannel()
 	// Run the Output! The channel for communicating with the outside world!
-	go attendOutputChannel()
+	go attendRaftChannel()
 
 	if standAlone > 0 {
 		log.Info("ANNOUNCEMENT: Running RAFT Leader Election in Stand Alone MODE")
 		log.Info("ANNOUNCEMENT: Forcing Start")
-		genesis := Packet{
-			Source: "0.0.0.0",
-			Type:   bchainlibs.StartRaft,
-		}
+
+		genesis := bchainlibs.CreateRaftStartPacket(me)
 		js, err := json.Marshal(genesis)
 		bchainlibs.CheckError(err, log)
 		buffer <- string(js)
 	} else {
+		go attendOutputChannel()
 		log.Info("ANNOUNCEMENT: Running RAFT Leader Election with Blockchain Implementation MODE")
 		log.Info("ANNOUNCEMENT: Waiting")
 	}
@@ -474,7 +492,7 @@ func main() {
 	}
 
 	close(buffer)
-	close(output)
+	close(raft)
 
 	<-done
 }
