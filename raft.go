@@ -22,9 +22,6 @@ import (
 
 // +++++++++ Go-Logging Conf
 var log = logging.MustGetLogger("raft")
-var format = logging.MustStringFormatter(
-	"%{level:.4s}=> %{time:0102 15:04:05.999} %{shortfile} %{message}",
-)
 
 // +++++++++ Constants
 const (
@@ -402,18 +399,23 @@ func main() {
 		os.MkdirAll(logPath, 0777)
 	}
 
-	var logFile = logPath + "raft.log"
-	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
-	if err != nil {
-		fmt.Printf("error opening file: %v", err)
-	}
+	// Logger configuration
+	logName := "raft"
+	f := bchainlibs.PrepareLogGen(logPath, logName, "data")
 	defer f.Close()
-
+	f2 := bchainlibs.PrepareLog(logPath, logName)
+	defer f2.Close()
 	backend := logging.NewLogBackend(f, "", 0)
-	backendFormatter := logging.NewBackendFormatter(backend, format)
+	backend2 := logging.NewLogBackend(f2, "", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, bchainlibs.LogFormat)
 	backendLeveled := logging.AddModuleLevel(backendFormatter)
 	backendLeveled.SetLevel(logging.DEBUG, "")
-	logging.SetBackend(backendLeveled)
+
+	// Only errors and more severe messages should be sent to backend1
+	backend2Leveled := logging.AddModuleLevel(backend2)
+	backend2Leveled.SetLevel(logging.INFO, "")
+
+	logging.SetBackend(backendLeveled, backend2Leveled)
 
 	log.Info("")
 	log.Info("ENV : RAFT_PORT = " + os.Getenv("RAFT_PORT"))
