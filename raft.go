@@ -220,6 +220,7 @@ func stopRaft() {
 	//forwarded = make(map[string]bool)
 	timestamps = make(map[string]int64)
 	timediffs = []int64{}
+	pingSent = 0
 
 	if timer != nil {
 		timer.Stop()
