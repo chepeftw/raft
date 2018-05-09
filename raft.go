@@ -472,6 +472,8 @@ func main() {
 	// Run the Output! The channel for communicating with the outside world!
 	go attendRaftChannel()
 
+	go attendOutputChannel()
+
 	if standAlone > 0 {
 		log.Info("ANNOUNCEMENT: Running RAFT Leader Election in Stand Alone MODE")
 		log.Info("ANNOUNCEMENT: Forcing Start")
@@ -481,23 +483,31 @@ func main() {
 		bchainlibs.CheckError(err, log)
 		buffer <- string(js)
 	} else {
-		go attendOutputChannel()
 		log.Info("ANNOUNCEMENT: Running RAFT Leader Election with Blockchain Implementation MODE")
 		log.Info("ANNOUNCEMENT: Waiting")
 	}
 
 	buf := make([]byte, 1024)
+	log.Debug("Creating buffer")
 
 	for {
+		log.Debug("For true loop")
 		n, _, err := ServerConn.ReadFromUDP(buf)
+		log.Debug("ServerConn.ReadFromUDP(buf)")
 		str := string(buf[0:n])
+		log.Debug("string(buf[0:n])")
 
 		buffer <- str
+		log.Debug("buffer <- str")
 		bchainlibs.CheckError(err, log)
 	}
 
 	close(buffer)
 	close(raft)
+	close(output)
+
+	log.Debug("bai!")
 
 	<-done
+	log.Debug("<-done")
 }
