@@ -282,7 +282,7 @@ func attendBufferChannel() {
 						avgTime := total / int64(len(timediffs))
 
 						startTimer()
-						toInfo("=> got ping from leader! ")
+						toInfo("=> got ping from leader ( " + payload.Source.String() + " )! ")
 						toDebug("=> RAFT_AVG_TIME=" + strconv.FormatInt(avgTime, 10))
 					}
 					break
