@@ -42,6 +42,8 @@ var me = net.ParseIP(bchainlibs.LocalhostAddr)
 
 var timeout = 0
 var pingSent = 0
+var sendMsgCount = 0
+var sizeMsgCount = 0
 var monitoringStartTime = int64(0)
 
 var timer *time.Timer
@@ -191,6 +193,10 @@ func attendRaftChannel() {
 			if Conn != nil {
 				buf := []byte(j)
 				_, err = Conn.Write(buf)
+
+				sizeMsgCount += len(buf)
+				sendMsgCount += 1
+
 				toDebug(j + " RAFT_MESSAGE_SIZE=" + strconv.Itoa(len(buf)))
 				toDebug("RAFT_SENDING_MESSAGE=1")
 				bchainlibs.CheckError(err, log)
@@ -215,12 +221,19 @@ func applyVote(ip string) {
 }
 
 func stopRaft() {
+
+	toDebug("RAFT_ACC_MESSAGE_SIZE=" + strconv.Itoa(sizeMsgCount))
+	toDebug("RAFT_ACC_SENDING_MESSAGE=" + strconv.Itoa(sendMsgCount))
+
 	state = IDLE
 	votes = make(map[string]int)
 	//forwarded = make(map[string]bool)
 	timestamps = make(map[string]int64)
 	timediffs = []int64{}
 	pingSent = 0
+
+	sizeMsgCount = 0
+	sendMsgCount = 0
 
 	if timer != nil {
 		timer.Stop()
