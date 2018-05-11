@@ -222,8 +222,7 @@ func applyVote(ip string) {
 
 func stopRaft() {
 
-	toDebug("RAFT_ACC_MESSAGE_SIZE=" + strconv.Itoa(sizeMsgCount))
-	toDebug("RAFT_ACC_SENDING_MESSAGE=" + strconv.Itoa(sendMsgCount))
+	toDebug("RAFT_ACC_MESSAGE_SIZE=" + strconv.Itoa(sizeMsgCount) + "|||| RAFT_ACC_SENDING_MESSAGE=" + strconv.Itoa(sendMsgCount))
 
 	state = IDLE
 	votes = make(map[string]int)
