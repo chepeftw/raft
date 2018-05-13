@@ -332,7 +332,7 @@ func attendBufferChannel() {
 						toInfo("=> Timeout in " + strconv.Itoa(timeout/2))
 						startTimerStar(float32(timeout/2), bchainlibs.EndElection)
 					} else if payload.Type == bchainlibs.RequestForVote && !eqIp(me, payload.Source) {
-						state = FOLLOWER
+						state = POST_FOLLOWER
 						sendVote(payload.Vote)
 						toInfo("=> Sending vote for " + payload.Vote)
 						startTimer()
@@ -360,14 +360,14 @@ func attendBufferChannel() {
 							startTimerStar(float32(timeout/2), bchainlibs.RaftTimeout)
 						}
 					} else if payload.Type == bchainlibs.LeaderPing {
-						state = FOLLOWER
+						state = POST_FOLLOWER
 						startTimer()
 					}
 					break
 				case LEADER:
 					if payload.Type == bchainlibs.LeaderPing {
 						if payload.ElectionTime < electionTime {
-							state = FOLLOWER
+							state = POST_FOLLOWER
 							toDebug("RAFT_REVERSE_WINNER=" + me.String())
 							startTimer()
 						}
