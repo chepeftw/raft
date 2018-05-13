@@ -30,6 +30,7 @@ const (
 
 const (
 	FOLLOWER  = iota
+	POST_FOLLOWER
 	CANDIDATE
 	LEADER
 	IDLE
@@ -60,9 +61,9 @@ var votes = make(map[string]int)
 var electionTime int64
 
 var forwarded = make(map[string]bool)
-var timestamps = make(map[string]int64)
+//var timestamps = make(map[string]int64)
 
-var timediffs []int64
+//var timediffs []int64
 
 //type Packet struct {
 //	Source       string `json:"src"`
@@ -149,7 +150,7 @@ func sendMessage(payload bchainlibs.Packet) {
 	raft <- string(js)
 
 	forwarded[getMessageKey(payload)] = true
-	timestamps[getMessageKey(payload)] = time.Now().UnixNano()
+	//timestamps[getMessageKey(payload)] = time.Now().UnixNano()
 }
 
 func getMessageKey(payload bchainlibs.Packet) string {
@@ -227,8 +228,8 @@ func stopRaft() {
 	state = IDLE
 	votes = make(map[string]int)
 	//forwarded = make(map[string]bool)
-	timestamps = make(map[string]int64)
-	timediffs = []int64{}
+	//timestamps = make(map[string]int64)
+	//timediffs = []int64{}
 	pingSent = 0
 
 	sizeMsgCount = 0
@@ -277,26 +278,51 @@ func attendBufferChannel() {
 				case FOLLOWER:
 					if payload.Type == bchainlibs.RaftTimeout {
 						state = CANDIDATE
-						toInfo("=> Changing to CANDIDATE!")
+						toInfo("=> Changing to CANDIDATE from FOLLOWER!")
 						startTimerRand()
 					} else if payload.Type == bchainlibs.RequestForVote {
 						sendVote(payload.Vote)
 						toInfo("=> Sending vote for " + payload.Vote)
+						state = POST_FOLLOWER
 						startTimer()
 					} else if payload.Type == bchainlibs.Vote {
 						applyVote(payload.Vote)
 						startTimer()
 					} else if payload.Type == bchainlibs.LeaderPing {
 
-						var total int64 = 0
-						for _, value := range timediffs {
-							total += value
-						}
-						avgTime := total / int64(len(timediffs))
+						//var total int64 = 0
+						//for _, value := range timediffs {
+						//	total += value
+						//}
+						//avgTime := total / int64(len(timediffs))
+
+						startTimer()
+						state = POST_FOLLOWER
+						toInfo("=> got ping from leader ( " + payload.Source.String() + " )! ")
+						//toDebug("=> RAFT_AVG_TIME=" + strconv.FormatInt(avgTime, 10))
+					}
+					break
+				case POST_FOLLOWER:
+					if payload.Type == bchainlibs.RaftTimeout {
+						state = CANDIDATE
+						toInfo("=> Changing to CANDIDATE from POST_FOLLOWER!")
+						startTimerRand()
+					} else if payload.Type == bchainlibs.RequestForVote {
+						toDebug("=> Sending vote for " + payload.Vote + " but not doing anything bro!")
+					} else if payload.Type == bchainlibs.Vote {
+						applyVote(payload.Vote)
+						startTimer()
+					} else if payload.Type == bchainlibs.LeaderPing {
+
+						//var total int64 = 0
+						//for _, value := range timediffs {
+						//	total += value
+						//}
+						//avgTime := total / int64(len(timediffs))
 
 						startTimer()
 						toInfo("=> got ping from leader ( " + payload.Source.String() + " )! ")
-						toDebug("=> RAFT_AVG_TIME=" + strconv.FormatInt(avgTime, 10))
+						//toDebug("=> RAFT_AVG_TIME=" + strconv.FormatInt(avgTime, 10))
 					}
 					break
 				case CANDIDATE:
@@ -365,11 +391,12 @@ func attendBufferChannel() {
 					// Welcome to Stranger Things ... THIS REALLY SHOULD NOT HAPPEN
 					break
 				}
-			} else {
-				time1 := timestamps[getMessageKey(payload)]
-				timediff := time.Now().UnixNano() - time1
-				timediffs = append(timediffs, timediff)
 			}
+			//else {
+			//	time1 := timestamps[getMessageKey(payload)]
+			//	timediff := time.Now().UnixNano() - time1
+			//	timediffs = append(timediffs, timediff)
+			//}
 
 			toDebug("RAFT_ATTEND_BUFFER_CHANNEL_START_TIME=" + strconv.FormatInt((time.Now().UnixNano()-attendBufferChannelStartTime)/int64(time.Nanosecond), 10))
 
